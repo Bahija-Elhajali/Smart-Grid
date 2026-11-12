@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+ingestion/data/ 
+ingestion/venv/ 
+ingestion/data/ 
+ingestion/venv/ 
