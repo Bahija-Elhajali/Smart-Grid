@@ -235,3 +235,11 @@ data-lake/data/
 data-lake/silver/*.backup
 data-lake/test_bronze.json
 data-lake/gold/check_gold_schema.py
+
+# Dataset UCI local (ne pas publier)
+data/
+
+# Scripts temporaires de verification
+check_silver_v2.py
+verify_silver_v2.py
+verify_gold_v2.py

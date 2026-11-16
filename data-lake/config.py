@@ -41,3 +41,9 @@ def configure_s3a(spark):
         "fs.s3a.aws.credentials.provider",
         "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
     )
+
+SILVER_VERSIONING_TEST_PATH = f"s3a://{BUCKET}/tests/silver_revision_integration_v2"
+
+SILVER_V2_PATH = f"s3a://{BUCKET}/silver/mesures_hudi_v2"
+
+GOLD_V2_PATH = f's3a://{BUCKET}/gold/consommation_quartier_v2'
