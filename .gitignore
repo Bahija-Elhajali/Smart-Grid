@@ -218,3 +218,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Smart Grid - local dependencies
+*.jar
+
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+
+# Local data and generated files
+data-lake/hudi/test_*.py
+data-lake/hudi/*.log
+data-lake/data/
+
+# Smart Grid - local test artifacts
+data-lake/silver/*.backup
+data-lake/test_bronze.json
+data-lake/gold/check_gold_schema.py
