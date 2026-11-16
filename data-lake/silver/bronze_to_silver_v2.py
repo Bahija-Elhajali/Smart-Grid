@@ -15,6 +15,9 @@ from pyspark.sql.functions import (
     countDistinct,
     struct,
     when,
+    current_timestamp,
+    sha2,
+    to_json,
 )
 from pyspark.sql.types import (
     StructType,
@@ -25,7 +28,7 @@ from pyspark.sql.types import (
 )
 
 sys.path.insert(0, "/tmp")
-from config import configure_s3a, BRONZE_PATH, SILVER_V2_PATH
+from config import configure_s3a, BRONZE_PATH, SILVER_V2_PATH, QUARANTINE_V2_PATH
 
 
 # Mode test active par defaut
@@ -33,6 +36,10 @@ DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 
 # Protection temporaire des corrections Hudi existantes
 ALLOW_SILVER_WRITE = False
+ALLOW_QUARANTINE_WRITE = os.getenv(
+    "ALLOW_QUARANTINE_WRITE", "false"
+).lower() == "true"
+
 
 
 spark = (
@@ -185,6 +192,31 @@ try:
         "inner"
     )
 
+    # Ajouter les informations de tracabilite de la quarantaine
+    quarantaine = (
+        quarantaine
+        .withColumn("reason", lit("CONFLICT_SAME_KEY_REVISION"))
+        .withColumn(
+            "quarantine_key",
+            sha2(
+                to_json(
+                    struct(
+                        "record_key",
+                        "revision",
+                        "quartier",
+                        "active_power",
+                        "voltage",
+                        "intensity",
+                        "is_anomaly"
+                    )
+                ),
+                256
+            )
+        )
+        .withColumn("quarantined_at", current_timestamp())
+        .withColumn("quarantine_version", lit(1))
+    )
+
     # Conserver uniquement les mesures sans conflit
     silver = silver.join(
         conflits,
@@ -202,6 +234,46 @@ try:
 
     # DRY_RUN : quarantaine affichee, non persistante.
     # Une persistance et un controle inter-batches restent a ajouter.
+    # Persistance optionnelle de la quarantaine
+    if not DRY_RUN and ALLOW_QUARANTINE_WRITE:
+        if quarantaine.limit(1).count() > 0:
+            (
+                quarantaine.write
+                .format("hudi")
+                .option(
+                    "hoodie.table.name",
+                    "silver_conflicts_v2"
+                )
+                .option(
+                    "hoodie.datasource.write.recordkey.field",
+                    "quarantine_key"
+                )
+                .option(
+                    "hoodie.datasource.write.precombine.field",
+                    "quarantine_version"
+                )
+                .option(
+                    "hoodie.datasource.write.keygenerator.class",
+                    "org.apache.hudi.keygen.NonpartitionedKeyGenerator"
+                )
+                .option(
+                    "hoodie.datasource.write.operation",
+                    "upsert"
+                )
+                .option(
+                    "hoodie.datasource.write.table.type",
+                    "COPY_ON_WRITE"
+                )
+                .mode("append")
+                .save(QUARANTINE_V2_PATH)
+            )
+            print("QUARANTINE_HUDI_OK")
+            print("Destination :", QUARANTINE_V2_PATH)
+        else:
+            print("QUARANTINE_VIDE")
+    else:
+        print("QUARANTINE_WRITE_DISABLED")
+
     # 7. Apercu Silver
     print("\n========== SILVER PREVIEW ==========")
 
@@ -228,11 +300,8 @@ try:
         print("Aucune ecriture Hudi effectuee.")
 
     elif not ALLOW_SILVER_WRITE:
-        raise RuntimeError(
-            "ECRITURE_SILVER_BLOQUEE : "
-            "le versioning des corrections Hudi "
-            "doit etre securise avant toute ecriture."
-        )
+        print("SILVER_WRITE_DISABLED")
+        print("Silver V2 conserve sans modification.")
 
     elif count == 0:
         print(

@@ -303,3 +303,82 @@ données générées ne doivent pas être commités.
 - Préparer l'orchestration avec Airflow.
 
 - Finaliser les tests de bout en bout.
+
+
+---
+
+## 12. Integration V2 - Silver, Gold et Quarantine
+
+Cette version d'integration conserve les tables Hudi historiques
+et utilise des chemins separes pour les nouvelles tables.
+
+### Chemins SILO / S3
+
+Bucket : `smartgrid-lake`
+
+| Couche | Chemin |
+|---|---|
+| Bronze | `bronze/releves/` |
+| Silver V2 | `silver/mesures_hudi_v2` |
+| Gold V2 | `gold/consommation_quartier_v2` |
+| Quarantine V2 | `quarantine/silver_conflicts_v2` |
+
+### Scripts principaux
+
+- `silver/bronze_to_silver_v2.py` : validation, deduplication,
+  detection des conflits et ecriture Hudi controlee.
+- `gold/silver_to_gold_v2.py` : agregation des consommations
+  par quartier et date.
+- `hudi/verify_quarantine_v2.py` : lecture et verification
+  des enregistrements en quarantaine.
+
+### Gestion des conflits
+
+Les mesures partageant la meme cle metier et la meme revision,
+mais ayant des valeurs differentes, sont exclues de Silver V2.
+
+Les variantes conflictuelles peuvent etre stockees dans
+une table Hudi Quarantine avec :
+
+- `quarantine_key` : identifiant calcule a partir du contenu.
+- `reason` : motif du rejet.
+- `quarantined_at` : horodatage de mise en quarantaine.
+- `quarantine_version` : valeur de precombine Hudi.
+
+L'ecriture Quarantine exige :
+
+- `DRY_RUN=false`
+- `ALLOW_QUARANTINE_WRITE=true`
+
+L'ecriture Silver reste protegee par
+`ALLOW_SILVER_WRITE=False`.
+
+### Resultats verifies
+
+- Integration MQTT vers Kafka puis Bronze : reussie.
+- Silver V2 : 20 mesures valides.
+- Gold V2 : 4 quartiers, avec 5 mesures chacun.
+- Detection : 2 variantes conflictuelles pour M099.
+- Persistance et lecture Quarantine Hudi : 2 enregistrements.
+- Test de correction Hudi sur table isolee : reussi.
+
+### Limites connues
+
+- La detection des conflits est actuellement intra-batch.
+- La gestion persistante des enregistrements invalides
+  n'est pas encore implementee.
+- L'idempotence Quarantine apres plusieurs executions
+  n'a pas encore ete verifiee.
+- Le test de versioning Hudi a ete effectue sur une table
+  isolee, sans migration des tables historiques.
+- Les donnees SILO sont locales et ne sont pas incluses
+  dans le depot GitHub.
+
+### Collaboration
+
+Cette integration utilise les fichiers d'ingestion
+fournis par Bahija El Hajali. Le travail Data Lake V2
+et l'integration sont developpes sur la branche
+`noura-abakri-data-lake-hudi-integration`.
+
+Les branches originales restent independantes.

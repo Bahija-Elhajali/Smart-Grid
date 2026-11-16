@@ -47,3 +47,5 @@ SILVER_VERSIONING_TEST_PATH = f"s3a://{BUCKET}/tests/silver_revision_integration
 SILVER_V2_PATH = f"s3a://{BUCKET}/silver/mesures_hudi_v2"
 
 GOLD_V2_PATH = f's3a://{BUCKET}/gold/consommation_quartier_v2'
+
+QUARANTINE_V2_PATH = f's3a://{BUCKET}/quarantine/silver_conflicts_v2'
